@@ -199,8 +199,8 @@ if [[ "$SVR_FQDN" == "" ]] ; then
 fi
 
 # Function to disable a file by appending its name with _disabled
-disable_file() {
-    mv "$1" "$1_disabled_by_hrace009" &> /dev/null
+rename_file() {
+    mv "$1" "$1_renamed_by_hrace009" &> /dev/null
 }
 
 # Random password generator function
@@ -229,6 +229,26 @@ add_local_domain() {
         echo "127.0.0.1 $1" >> /etc/hosts;
     fi
 }
+
+# Create directory Function
+create_directory() {
+if [ ! -d /etc/httpd/conf.d/userdata/$CREATE_USER ]; then
+  mkdir -p /etc/httpd/conf.d/userdata/$CREATE_USER;
+fi
+if [ ! -d /home/$CREATE_USER/public_html/default ]; then
+  mkdir -p /home/$CREATE_USER/public_html/default;
+fi
+if [ ! -d /home/$CREATE_USER/tmp ]; then
+  mkdir -p /home/$CREATE_USER/tmp;
+fi
+if [ ! -d /home/$CREATE_USER/logs ]; then
+  mkdir -p /home/$CREATE_USER/logs;
+fi
+if [ ! -d /home/$CREATE_USER/public_html/default/cgi-bin ]; then
+  mkdir -p /home/$CREATE_USER/public_html/default/cgi-bin;
+fi
+}
+
 RANDOM_HASHES=$(randomhashes)
 
 echo -e "\n\e[1;33m=== Special User Information ===\e[0m"
@@ -260,7 +280,7 @@ fi
 echo -e "\nInstalling Server\n\e[0mServer Domain: \e[1;33mhttp://$SVR_FQDN\n\e[0mIP: \e[1;33m$PUBLIC_IP\e[0m"
 echo -e "OS: \e[1;33m$OS $VER\e[0m"
 
-echo -e "\n\e[1;33m=== Please sit and take coffe break, let me install PW Server $PW_VERSION for you ===\e[0m"
+echo -e "\n\e[1;33m=== Please sit and take coffe break, let me install Server for you ===\e[0m"
 sleep 5
 
 #--- Adapt repositories and packages sources
@@ -313,8 +333,8 @@ sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
 setenforce 0
 
 #--- List all already installed packages (may help to debug)
-echo -e "\n\e[1;33mListing of all packages installed:\e[0m"
-rpm -qa | sort
+#echo -e "\n\e[1;33mListing of all packages installed:\e[0m"
+#rpm -qa | sort
 
 #--- Ensures that all packages are up to date
 echo -e "\n\e[1;33mUpdating+upgrading system, it may take some time...\e[0m"
@@ -340,82 +360,231 @@ echo -e "\n\e[32;3m=== DONE ===\e[0m"
 
 echo -e "\n\e[1;33m=== Creating Special Linux Users ===\e[0m"
 useradd -m $CREATE_USER -s /usr/sbin/nologin -c "Web Services"
-mkdir -p /home/$CREATE_USER/public_html/default
-mkdir -p /home/$CREATE_USER/tmp
-mkdir -p /home/$CREATE_USER/logs
+create_directory
 chown -R $CREATE_USER:$CREATE_USER /home/$CREATE_USER
 chmod 711 /home/$CREATE_USER
 echo -e "\n\e[32;3m=== DONE ===\e[0m"
 
 echo -e "\n\e[1;33m=== Configure Web Server ===\e[0m"
-mkdir -p /opt/Website/conf
 sed -i -e "s/^/#/" "/etc/httpd/conf.modules.d/00-lua.conf"
 sed -i -e "s/^/#/" "/etc/httpd/conf.modules.d/00-dav.conf"
 sed -i -e "s/^/#/" "/etc/httpd/conf.modules.d/01-cgi.conf"
 sed -i -e "/LoadModule mpm_prefork_module/ s/^#*/# /" "/etc/httpd/conf.modules.d/00-mpm.conf"
 sed -i -e "/#LoadModule mpm_event_module/ s/^#*//" "/etc/httpd/conf.modules.d/00-mpm.conf"
-
-echo -e "\nInclude /opt/Website/conf/vHost.conf" >> /etc/httpd/conf/httpd.conf
-sed -i -e "/Listen 80/ s/^#*/# /" "/etc/httpd/conf/httpd.conf"
-
 sed -i -e "/AddType text\/html .php/ s/^#*/# /" "/etc/httpd/conf.d/php.conf"
 sed -i -e "/DirectoryIndex index.php/q" "/etc/httpd/conf.d/php.conf"
 
-#Add Default VHost
+rename_file /etc/httpd/conf/httpd.conf
+
+#Create new DEFAULT VHOST using cPanel style
 {
-	echo "######### Default VHOST ##########"
-	echo "ServerName localhost"
-	echo "User $CREATE_USER"
-	echo "Group $CREATE_USER"
-	echo "<Directory /home/$CREATE_USER/public_html/default>"
-	echo "    Options +FollowSymLinks"
-	echo "    DirectoryIndex index.php"
-	echo "    deny from all"
-	echo "    <IfModule mod_php5.c>"
-	echo "        AddType application/x-httpd-php .php"
-	echo "        php_flag magic_quotes_gpc Off"
-	echo "        php_flag track_vars On"
-	echo "        php_flag register_globals Off"
-	echo "        php_admin_value upload_tmp_dir /home/$CREATE_USER/tmp"
-	echo "    </IfModule>"
-	echo "</Directory>"
-	echo ""
-	echo "ServerTokens Prod"
-	echo "Include /opt/Website/conf/AllVhost.conf"
-} >> /opt/Website/conf/vHost.conf
+echo "###################### DEFAULT VHOST #############################"
+echo ""
+echo "ServerRoot \"/etc/httpd\""
+echo ""
+echo "Include conf.modules.d/*.conf"
+echo ""
+echo "User nobody"
+echo "Group nobody"
+echo ""
+echo "ServerAdmin $CREATE_USER@$SVR_FQDN"
+echo ""
+echo "ServerName localhost"
+echo ""
+echo "TraceEnable Off"
+echo "ServerSignature Off"
+echo "ServerTokens ProductOnly"
+echo "FileETag None"
+echo ""
+echo "<Directory \"/\">"
+echo "    AllowOverride All"
+echo "   Options ExecCGI FollowSymLinks Includes IncludesNOEXEC Indexes MultiViews SymLinksIfOwnerMatch"
+echo "</Directory>"
+echo ""
+echo "StartServers 5"
+echo "<IfModule prefork.c>"
+echo "    MinSpareServers 5"
+echo "    MaxSpareServers 10"
+echo "</IfModule>"
+echo ""
+echo "ServerLimit 256"
+echo "MaxRequestWorkers 1000"
+echo "MaxConnectionsPerChild 1000"
+echo "KeepAlive On"
+echo "KeepAliveTimeout 5"
+echo "MaxKeepAliveRequests 100"
+echo "Timeout 100"
+echo ""
+echo "<IfModule dir_module>"
+echo "    DirectoryIndex index.php index.php5 index.php4 index.php3 index.perl index.pl index.plx index.ppl index.cgi index.jsp index.js index.jp index.phtml index.shtml index.xhtml index.html index.htm index.wml Default.html Default.htm default.html default.htm home.html home.htm"
+echo "</IfModule>"
+echo ""
+echo "<Directory \"/var/www\">"
+echo "    Options All"
+echo "    AllowOverride None"
+echo "    Require all granted"
+echo "</Directory>"
+echo ""
+echo "<Files ~ \"^error_log$\">"
+echo "    Order allow,deny"
+echo "    Deny from all"
+echo "    Satisfy All"
+echo "</Files>"
+echo ""
+echo "<Files \".ht*\">"
+echo "    Require all denied"
+echo "</Files>"
+echo ""
+echo "<IfModule mime_module>"
+echo "    TypesConfig /etc/mime.types"
+echo ""
+echo "    AddType application/x-compress .Z"
+echo "    AddType application/x-gzip .gz .tgz"
+echo "    AddType text/html .shtml"
+echo "    AddType application/x-tar .tgz"
+echo "    AddType text/vnd.wap.wml .wml"
+echo "    AddType image/vnd.wap.wbmp .wbmp"
+echo "    AddType text/vnd.wap.wmlscript .wmls"
+echo "    AddType application/vnd.wap.wmlc .wmlc"
+echo "    AddType application/vnd.wap.wmlscriptc .wmlsc"
+echo ""
+echo "    # These extensions are used to redirect incoming requests to WHM"
+echo "    AddHandler cgi-script .cgi .pl .plx .ppl .perl"
+echo ""
+echo "    # This is used for custom error documents"
+echo "    AddHandler server-parsed .shtml"
+echo "</IfModule>"
+echo ""
+echo "ErrorLog \"/home/$CREATE_USER/logs/error_log\""
+echo ""
+echo "LogLevel warn"
+echo ""
+echo "<IfModule log_config_module>"
+echo "    LogFormat \"%h %l %u %t \\\"%r\\\" %>s %b \\\"%{Referer}i\\\" \\\"%{User-Agent}i\\\"\" combined"
+echo "    LogFormat \"%h %l %u %t \\\"%r\\\" %>s %b\" common"
+echo ""
+echo "    <IfModule logio_module>"
+echo "      LogFormat \"%h %l %u %t \\\"%r\\\" %>s %b \\\"%{Referer}i\\\" \\\"%{User-Agent}i\\\" %I %O\" combinedio"
+echo "    </IfModule>"
+echo ""
+echo "    CustomLog \"/home/$CREATE_USER/logs/access_log\" combined"
+echo "</IfModule>"
+echo ""
+echo "<IfModule alias_module>"
+echo "    ScriptAlias /cgi-bin/ \"/var/www/cgi-bin/\""
+echo "</IfModule>"
+echo ""
+echo "AddDefaultCharset UTF-8"
+echo ""
+echo "<IfModule mime_magic_module>"
+echo "    MIMEMagicFile conf/magic"
+echo "</IfModule>"
+echo ""
+echo "EnableSendfile on"
+echo ""
+echo "Listen 0.0.0.0:80"
+echo "Listen [::]:80"
+echo ""
+echo "<IfModule ssl_module>"
+echo "    SSLCipherSuite ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES256-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA:!DSS"
+echo "    SSLProtocol All -SSLv2 -SSLv3"
+echo "    SSLPassPhraseDialog  builtin"
+echo ""
+echo "    <IfModule socache_shmcb_module>"
+echo "        SSLUseStapling on"
+echo "        SSLStaplingCache shmcb:/run/httpd/stapling_cache_shmcb(256000)"
+echo ""
+echo "        SSLStaplingReturnResponderErrors off"
+echo "        SSLStaplingErrorCacheTimeout 60"
+echo "        SSLSessionCache shmcb:/run/httpd/ssl_gcache_data_shmcb(1024000)"
+echo "    </IfModule>"
+echo "    <IfModule !socache_shmcb_module>"
+echo "        SSLSessionCache dbm:/run/httpd/ssl_gcache_data_dbm"
+echo "    </IfModule>"
+echo ""
+echo "    SSLSessionCacheTimeout  300"
+echo "    Mutex                   file:/run/httpd ssl-cache"
+echo "    SSLRandomSeed startup builtin"
+echo "    SSLRandomSeed connect builtin"
+echo ""
+echo "    Listen 0.0.0.0:443"
+echo "    Listen [::]:443"
+echo ""
+echo "    AddType application/x-x509-ca-cert .crt"
+echo "    AddType application/x-pkcs7-crl .crl"
+echo "</IfModule>"
+echo ""
+echo "Include \"conf.d/*.conf\""
+echo ""
+echo "##################################################"
+echo "##################################################"
+echo "#"
+echo "# Include default vhosts conf for unbound IPs"
+echo "#"
+echo "##################################################"
+echo "##################################################"
+echo ""
+echo "Include \"conf.d/userdata/$CREATE_USER/$CREATE_USER.conf\""
+} >> /etc/httpd/conf/httpd.conf
 
 #Add VHost
 {
-	echo "######### Default VHOST $SVR_FQDN ##########"
-	echo "NameVirtualHost *:80"
-	echo "Listen 80"
-	echo "<VirtualHost $PUBLIC_IP:80>"
-	echo "ServerName $SVR_FQDN"
-	echo "ServerAdmin $CREATE_USER@$SVR_FQDN"
-	echo "DocumentRoot \"/home/$CREATE_USER/public_html/default\""
-	echo "php_admin_value open_basedir \"/home/$CREATE_USER/public_html/default:/home/$CREATE_USER/tmp/\""
-	echo "php_admin_value suhosin.executor.func.blacklist \"passthru, show_source, shell_exec, system, pcntl_exec, popen, pclose, proc_open, proc_nice, proc_terminate, proc_get_status, proc_close, leak, apache_child_terminate, posix_kill, posix_mkfifo, posix_setpgid, posix_setsid, posix_setuid, escapeshellcmd, escapeshellarg, exec\""
-	echo "ErrorLog \"/home/$CREATE_USER/logs/$SVR_FQDN-error.log\""
-	echo "CustomLog \"/home/$CREATE_USER/logs/$SVR_FQDN-access.log\" combined"
-	echo "CustomLog \"/home/$CREATE_USER/logs/$SVR_FQDN-bandwidth.log\" common"
-	echo "AddType application/x-httpd-php .php"
-	echo "<Directory \"/home/$CREATE_USER/public_html/default\">"
-	echo "  Options +FollowSymLinks -Indexes"
-	echo "  AllowOverride All"
-	echo "  Order Allow,Deny"
-	echo "  Allow from all"
-	echo "  Require all granted"
-	echo "</Directory>"
-	echo "AddType application/x-httpd-php .php3 .php"
-	echo "DirectoryIndex index.html index.htm index.php index.asp index.aspx index.jsp index.jspa index.shtml index.shtm"
-    echo "<IfModule proxy_fcgi_module>"
-    echo "    <FilesMatch \.(phtml|php[0-9]*)$>"
-    echo "        SetHandler \"proxy:unix:/var/run/php-fpm/$CREATE_USER-$RANDOM_HASHES.sock|fcgi://$CREATE_USER/\""
-    echo "    </FilesMatch>"
-    echo "</IfModule>"
-	echo "</VirtualHost>"
-	echo ""
-} >> /opt/Website/conf/AllVhost.conf
+echo "##################################################"
+echo "##################################################"
+echo "#"
+echo "# Define default vhosts for HTTP"
+echo "#"
+echo "##################################################"
+echo "##################################################"
+echo ""
+echo "<VirtualHost $PUBLIC_IP:80>"
+echo "	ServerName $SVR_FQDN"
+echo "	DocumentRoot /home/$CREATE_USER/public_html/default"
+echo "	ServerAdmin $CREATE_USER@$SVR_FQDN"
+echo "	UseCanonicalName Off"
+echo "  ErrorLog \"/home/$CREATE_USER/logs/$SVR_FQDN-error.log\""
+echo ""
+echo "	<IfModule include_module>"
+echo "		<Directory \"/home/CREATE_USER/public_html/default\">"
+echo "			SSILegacyExprParser On"
+echo "		</Directory>"
+echo "	</IfModule>"
+echo ""
+echo "	<IfModule suphp_module>"
+echo "		suPHP_UserGroup $CREATE_USER $CREATE_USER"
+echo "	</IfModule>"
+echo ""
+echo "	<IfModule suexec_module>"
+echo "		SuexecUserGroup $CREATE_USER $CREATE_USER"
+echo "	</IfModule>"
+echo ""
+echo "	<IfModule alias_module>"
+echo "		ScriptAlias /cgi-bin/ /home/$CREATE_USER/public_html/default/cgi-bin/"
+echo "	</IfModule>"
+echo ""
+echo "############### SSL SETTINGS ##############"
+echo "#<IfModule ssl_module>"
+echo "# SSLEngine on"
+echo ""   
+echo "# SSLCertificateFile /etc/letsencrypt/live/$SVR_FQDN/cert.pem"
+echo "# SSLCertificateKeyFile /etc/letsencrypt/live/$SVR_FQDN/privkey.pem"
+echo "# SSLCertificateChainFile /etc/letsencrypt/live/$SVR_FQDN/chain.pem"
+echo "# SSLCACertificateFile /etc/letsencrypt/live/$SVR_FQDN/fullchain.pem"
+echo "# SetEnvIf User-Agent \".*MSIE.*\" nokeepalive ssl-unclean-shutdown"
+echo "# <Directory \"/home/$SVR_FQDN/public_html/default/cgi-bin\">"
+echo "# SSLOptions +StdEnvVars"
+echo "# </Directory>"
+echo "#</IfModule>"
+echo "###########################################"
+echo ""
+echo "	<IfModule proxy_fcgi_module>"
+echo "		<FilesMatch \.(phtml|php[0-9]*)$>"
+echo "			SetHandler \"proxy:unix:/var/run/php-fpm/$CREATE_USER-$RANDOM_HASHES.sock|fcgi://$CREATE_USER/\""
+echo "		</FilesMatch>"
+echo "	</IfModule>"
+echo ""
+echo "</VirtualHost>"
+} >> /etc/httpd/conf.d/userdata/$CREATE_USER/$CREATE_USER.conf
 
 #Configure FPM
 rm /etc/php-fpm.d/www.conf
@@ -706,4 +875,4 @@ echo -e "\e[1;33m (theses documentation are saved in /root/Installation_Document
 echo -e "\e[1;33m#####################################################################\e[0m"
 echo ""
 } &>/dev/tty
-shutdown -r now
+#shutdown -r now

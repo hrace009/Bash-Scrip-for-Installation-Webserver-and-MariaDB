@@ -1,5 +1,5 @@
 #!/bin/bash
-# Program: This for Install Apache + MariaDB + PHP56 + FPM
+# Program: This for Install Apache + MariaDB + PHP70 + FPM
 # History:
 # 01-04-2017 hrace009 First created.
 clear
@@ -327,7 +327,7 @@ $RPM_IMPORT $REMI_KEY
 sed -i -e 's/\]$/\]\npriority=10/g' "/etc/yum.repos.d/"remi*
 sed -i 's|priority=[0-9]\+|priority=10|' "/etc/yum.repos.d/"remi*
 
-yum-config-manager --enable remi-php56 epel mariadb
+yum-config-manager --enable remi-php70 epel mariadb
 
 # We need to disable SELinux...
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config

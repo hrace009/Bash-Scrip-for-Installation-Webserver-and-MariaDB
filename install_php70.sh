@@ -327,6 +327,29 @@ $RPM_IMPORT $REMI_KEY
 sed -i -e 's/\]$/\]\npriority=10/g' "/etc/yum.repos.d/"remi*
 sed -i 's|priority=[0-9]\+|priority=10|' "/etc/yum.repos.d/"remi*
 
+#--- Add CodeIT Repository
+{
+	echo "[CodeIT]"
+	echo "name=CodeIT repo"
+	echo "baseurl=https://repo.codeit.guru/packages/centos/7/\$basearch"
+	echo "enabled=1"
+	echo "gpgkey=https://repo.codeit.guru/RPM-GPG-KEY-codeit"
+	echo "gpgcheck=1"
+} >> /etc/yum.repos.d/codeit.el7.repo
+sed -i -e 's/\]$/\]\npriority=10/g' "/etc/yum.repos.d/"codeit*
+sed -i 's|priority=[0-9]\+|priority=10|' "/etc/yum.repos.d/"codeit*
+
+#--- Add CityFan Repository
+{
+	echo "[CityFan]"
+	echo "name=City Fan Repo"
+	echo "baseurl=http://www.city-fan.org/ftp/contrib/yum-repo/rhel\$releasever/\$basearch/"
+	echo "enabled=0"
+	echo "gpgcheck=0"
+} >> /etc/yum.repos.d/cityfan.repo
+sed -i -e 's/\]$/\]\npriority=10/g' "/etc/yum.repos.d/"cityfan*
+sed -i 's|priority=[0-9]\+|priority=10|' "/etc/yum.repos.d/"cityfan*
+
 yum-config-manager --enable remi-php70 epel mariadb
 
 # We need to disable SELinux...
